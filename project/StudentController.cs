@@ -44,7 +44,22 @@ namespace PULSR_3
         /// <param name="theta2">Lower motor angle (degrees)</param>
         /// <returns>Array {screenX, screenY}</returns>
         public int[] ForwardKinematics(double theta1, double theta2)
-        {
+        {// 1. Convert motor angles to radians
+        double rad1 = theta1 * (Math.PI / 180.0);
+        double rad2 = theta2 * (Math.PI / 180.0);
+        double radOffset = 20.0 * (Math.PI / 180.0); // The 20° physical offset
+
+        // 2. Planar Kinematics Math (L1=26, L2=52)
+       // This finds the local position before rotation
+       double e2 = (26 * Math.Cos(rad1)) + (52 * Math.Cos(rad2));
+       double e1 = (26 * Math.Sin(rad1)) + (52 * Math.Sin(rad2));
+
+      // 3. Apply Rotation Matrix and Scaling (SCALER=25)
+     // This maps the robot's physical position to screen pixels
+       double x_screen = ((e1 * Math.Cos(radOffset)) - (e2 * Math.Sin(radOffset))) * 25;
+       double y_screen = (-(e2 * Math.Cos(radOffset)) - (e1 * Math.Sin(radOffset))) * 25;
+
+       return new Point(x_screen, y_screen);
             // TODO Step 1: Convert degrees to radians
             // double t1_rad = ...
             // double t2_rad = ...
@@ -72,7 +87,25 @@ namespace PULSR_3
         /// Parse each line as an integer and store in the lists.
         /// </summary>
         private void LoadTrajectoryFiles()
-        {
+        {    try {
+        // Clear lists to prevent doubling data if called twice
+        upper_targets.Clear();
+        lower_targets.Clear();
+
+       // Read the pre-computed motor speeds for the circle
+       string[] upperLines = File.ReadAllLines("Nupper_targets.txt");
+       foreach (string line in upperLines) {
+        if (int.TryParse(line, out int val)) upper_targets.Add(val);
+    }
+    
+      string[] lowerLines = File.ReadAllLines("Nlower_targets.txt");
+      foreach (string line in lowerLines) {
+        if (int.TryParse(line, out int val)) lower_targets.Add(val);
+    }
+} catch (Exception ex) {
+    // This helps debug if the files are missing in bin/Debug
+    Console.WriteLine("Error loading files: " + ex.Message);
+}
             // TODO: Read "Nupper_targets.txt" 
             // - Use File.ReadAllLines() to get all lines
             // - Parse each line as int using int.TryParse()
@@ -94,7 +127,21 @@ namespace PULSR_3
         /// <param name="orbitAngle">Current target angle on the orbit (270 to -90)</param>
         /// <returns>Array {upperSpeed, lowerSpeed}</returns>
         public int[] CalculateControl(int robotX, int robotY, double orbitAngle)
-        {
+        { // The instructions state: Angle 270° = Step 0
+        int step = (int)(270 - orbitAngle);
+
+        // Safety: Keep the index within the 0-359 range of our lists
+        if (step < 0) step = 0;
+        if (step > 359) step = 359;
+
+       // Ensure we don't crash if files failed to load
+       if (upper_targets.Count > step && lower_targets.Count > step) {
+       // Return the speeds as a new motor command object (usually a double array or specific Type)
+      // Check your template's return type; usually it's [upper_speed, lower_speed]
+      return new double[] { upper_targets[step], lower_targets[step] };
+      }
+
+      return new double[] { 0, 0 }; // Default to stop if no data
             // TODO Step 1: Calculate which step we are on
             // The orbit starts at 270 degrees and goes to -90 degrees
             // Step 0 = angle 270
